@@ -1,7 +1,7 @@
 use libc;
 use std::ffi::c_void;
 
-use crate::platform::{PlatformFunctions, Platform};
+use crate::platform::{Platform, PlatformFunctions};
 
 impl PlatformFunctions for Platform {
     fn get_page_size() -> usize {

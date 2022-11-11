@@ -2,13 +2,13 @@ use std::{ffi::c_void, ptr::addr_of_mut};
 
 use windows::Win32::System::{
     Memory::{
-        VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE,
-        MEM_RESERVE, PAGE_READWRITE,
+        VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE, MEM_RESERVE,
+        PAGE_READWRITE,
     },
     SystemInformation::{GetSystemInfo, SYSTEM_INFO},
 };
 
-use crate::platform::{PlatformFunctions, Platform};
+use crate::platform::{Platform, PlatformFunctions};
 
 impl PlatformFunctions for Platform {
     fn get_page_size() -> usize {
