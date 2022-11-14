@@ -22,11 +22,27 @@ pub struct DynamicArena {
 }
 
 impl DynamicArena {
-    // TODO: more documentation with details on page sizes, and difference between
-    // -- capacity and reserved
-    /// reserved must be greater than or equal to capacity
-    /// It is recommended that capacity and reserved are multiples of page size
-    pub fn with_capacity_reserve(capacity: usize, reserved: usize) -> DynamicArena {
+    /// Create a dynamic arena by specifying its capacity and its reserved
+    /// memory size.
+    /// Reserved must be greater than or equal to capacity.
+    /// It is recommended that `capacity` and `reserved` are multiples of page
+    /// size since that will the caller to make maximum use of the pages that
+    /// are allocated.
+    /// # Arguments
+    /// * `capacity` - the amount of memory immediately available without
+    /// committing more memory from the system
+    /// * `reserved` - the amount of contiguous memory reserved for this arena.
+    /// This arena will not return an error until you attempt to allocate more
+    /// memory than you have reserved
+    /// # Examples
+    /// ```
+    /// use tea_dynamic_arena::DynamicArena;
+    /// let arena = DynamicArena::with_capacity_reserve(1024, 2048);
+    /// ```
+    pub fn with_capacity_reserve(
+        capacity: usize,
+        reserved: usize,
+    ) -> DynamicArena {
         assert!(capacity <= reserved);
 
         let base: *mut u8;
@@ -48,8 +64,7 @@ impl DynamicArena {
         }
     }
 
-    // TODO: inline
-    /// increases committed page count if there is not enough memory
+    /// Increases committed page count if there is not enough memory
     fn grow(&self, new_mem_needed: usize) -> Result<(), AllocError> {
         let mem_needed = self.used.get() + new_mem_needed;
 
@@ -74,16 +89,32 @@ impl DynamicArena {
         }
     }
 
-    // TODO: document me
+    /// Allocates from our arena based on layout. Will grow the arena if
+    /// necessary
     fn get_alloc_ptr(&self, layout: Layout) -> Result<*mut u8, AllocError> {
         self.grow(layout.size())?;
 
-        let result: *mut u8 = unsafe { self.base.offset(self.used.get() as isize) };
+        let result: *mut u8 =
+            unsafe { self.base.offset(self.used.get() as isize) };
         self.used.set(self.used.get() + layout.size());
         Ok(result)
     }
 
-    // TODO: document me
+    /// Allocate and initialize a single instance of a data structure.
+    /// Will grow into reserved space if needed
+    /// # Arguments
+    /// * `val` - The value to initialize the instance to.
+    /// # Examples
+    /// ```
+    /// # use tea_dynamic_arena::DynamicArena;
+    /// let arena = DynamicArena::with_capacity_reserve(4096, 8192);
+    /// match arena.alloc(5){
+    ///     Ok(result) => {
+    ///         assert_eq!(*result, 5);
+    ///     },
+    ///     Err(_) => assert!(false)
+    /// };
+    /// ```
     pub fn alloc<T>(&self, val: T) -> Result<&mut T, AllocError> {
         let layout = Layout::new::<T>();
         let result_ptr = self.get_alloc_ptr(layout)?;
@@ -95,6 +126,21 @@ impl DynamicArena {
         }
     }
 
+    /// Allocate and initialize a single instance of a data structure. It is
+    /// initialized with a value of 0
+    /// # Arguments
+    /// * `T` - Generic. The type to allocate.
+    /// # Examples
+    /// ```
+    /// # use tea_dynamic_arena::DynamicArena;
+    /// let arena = DynamicArena::with_capacity_reserve(4096, 8192);
+    /// match arena.alloc_zeroed::<i32>(){
+    ///     Ok(result) => {
+    ///         assert_eq!(*result, 0);
+    ///     },
+    ///     Err(_) => assert!(false)
+    /// };
+    /// ```
     pub fn alloc_zeroed<T>(&self) -> Result<&mut T, AllocError> {
         let layout = Layout::new::<T>();
         let result_ptr = self.get_alloc_ptr(layout)?;
@@ -106,11 +152,37 @@ impl DynamicArena {
         }
     }
 
-    pub fn alloc_array<T>(&self, val: T, count: usize) -> Result<&mut [T], AllocError>
+    /// Allocates an array of type T with count elements. The initial value of
+    /// the elements in the array is val.
+    /// alloc_array performs a cast from usize to isize, and will panic if
+    /// the count value does not fit in isize
+    /// # Arguments
+    /// * `val` - the value to initialize the elements in the array to
+    /// * `count` - the number of elements to allocate for the array
+    /// # Examples
+    /// ```
+    /// # use tea_dynamic_arena::DynamicArena;
+    /// let arena = DynamicArena::with_capacity_reserve(4096, 8192);
+    /// match arena.alloc_array(1, 5){
+    ///     Ok(result) => {
+    ///         assert_eq!(result.len(), 5);
+    ///         for element in result {
+    ///             assert_eq!(*element, 1);
+    ///         }
+    ///     },
+    ///     Err(_) => assert!(false)
+    /// };
+    /// ```
+    pub fn alloc_array<T>(
+        &self,
+        val: T,
+        count: usize,
+    ) -> Result<&mut [T], AllocError>
     where
         T: Clone,
     {
-        let layout = Layout::array::<T>(count).expect("Bad count value for array");
+        let layout =
+            Layout::array::<T>(count).expect("Bad count value for array");
         let result_ptr = self.get_alloc_ptr(layout)?;
 
         let result: &mut [T];
@@ -126,11 +198,15 @@ impl DynamicArena {
         Ok(result)
     }
 
-    pub fn alloc_zeroed_array<T>(&self, count: usize) -> Result<&mut [T], AllocError>
+    pub fn alloc_zeroed_array<T>(
+        &self,
+        count: usize,
+    ) -> Result<&mut [T], AllocError>
     where
         T: Clone,
     {
-        let layout = Layout::array::<T>(count).expect("Bad count value for array");
+        let layout =
+            Layout::array::<T>(count).expect("Bad count value for array");
         let result_ptr = self.get_alloc_ptr(layout)?;
 
         let result: &mut [T];
@@ -143,11 +219,15 @@ impl DynamicArena {
         Ok(result)
     }
 
-    pub fn alloc_uninitialized_array<T>(&self, count: usize) -> Result<&mut [T], AllocError>
+    pub fn alloc_uninitialized_array<T>(
+        &self,
+        count: usize,
+    ) -> Result<&mut [T], AllocError>
     where
         T: Clone,
     {
-        let layout = Layout::array::<T>(count).expect("Bad count value for array");
+        let layout =
+            Layout::array::<T>(count).expect("Bad count value for array");
         let result_ptr = self.get_alloc_ptr(layout)?;
 
         let result: &mut [T];
@@ -212,8 +292,8 @@ mod tests {
     use crate::{
         errors::AllocError,
         test_common::{
-            I32Struct, LargerStruct, MixedStruct, SmallStruct, SmallerStruct, TestStruct,
-            ThreeByteStruct,
+            I32Struct, LargerStruct, MixedStruct, SmallStruct, SmallerStruct,
+            TestStruct, ThreeByteStruct,
         },
     };
 
@@ -223,7 +303,8 @@ mod tests {
         #[test]
         fn alloc() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
             {
                 let test = arena.alloc(TestStruct { x: 0.0, y: 0.0 }).unwrap();
                 assert!(test.x == 0.0);
@@ -234,7 +315,8 @@ mod tests {
         #[test]
         fn alloc_zeroed() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
             {
                 let test = arena.alloc_zeroed::<TestStruct>().unwrap();
                 assert!(test.x == 0.0);
@@ -275,7 +357,8 @@ mod tests {
         #[test]
         fn reset() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
 
             fill_arena(
                 &mut arena,
@@ -298,7 +381,8 @@ mod tests {
         #[test]
         fn reset_without_shrink() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 2 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 2 * page_size);
 
             fill_arena(
                 &mut arena,
@@ -321,7 +405,8 @@ mod tests {
         #[test]
         fn reset_and_shrink() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 2 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 2 * page_size);
 
             fill_arena(
                 &mut arena,
@@ -348,7 +433,8 @@ mod tests {
         fn shrink_to_reserve_size() {
             let page_size = Platform::get_page_size();
             let reserve_size = 2 * page_size;
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, reserve_size);
 
             fill_arena(
                 &mut arena,
@@ -371,7 +457,8 @@ mod tests {
         fn shrink_to_reserve_size_under_committed() {
             let page_size = Platform::get_page_size();
             let reserve_size = 2 * page_size;
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, reserve_size);
 
             // only fill up to the current committed size
             while page_size - arena.committed.get() > size_of::<TestStruct>() {
@@ -390,7 +477,8 @@ mod tests {
         #[test]
         fn reset_and_shrink_page_offset() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
 
             fill_arena(
                 &mut arena,
@@ -416,7 +504,8 @@ mod tests {
         #[test]
         fn shrink_to_zero() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
 
             fill_arena(
                 &mut arena,
@@ -445,7 +534,8 @@ mod tests {
         #[test]
         fn alloc_struct_page_size_factor() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
 
             fill_arena::<u8>(&mut arena, 0);
             assert_eq!(arena.used.get(), arena.committed.get());
@@ -456,7 +546,8 @@ mod tests {
         #[test]
         fn alloc_struct_not_page_size_factor() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
 
             fill_arena(
                 &mut arena,
@@ -466,7 +557,10 @@ mod tests {
             );
             assert!(arena.used.get() < arena.committed.get());
             // check that all of the memory that could have been used was used
-            assert!((arena.committed.get() - arena.used.get()) < size_of::<ThreeByteStruct>());
+            assert!(
+                (arena.committed.get() - arena.used.get())
+                    < size_of::<ThreeByteStruct>()
+            );
             assert_eq!(arena.committed.get(), arena.reserved);
         }
 
@@ -475,7 +569,8 @@ mod tests {
         #[test]
         fn alloc_to_capacity() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, 4 * page_size);
 
             for _ in 0..page_size {
                 arena.alloc_zeroed::<u8>().unwrap();
@@ -491,7 +586,10 @@ mod tests {
         #[test]
         fn alloc_under_page_size() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size / 2, page_size / 2);
+            let mut arena = DynamicArena::with_capacity_reserve(
+                page_size / 2,
+                page_size / 2,
+            );
 
             fill_arena::<u8>(&mut arena, 0);
             assert_eq!(arena.committed.get(), page_size / 2);
@@ -504,7 +602,8 @@ mod tests {
         #[should_panic]
         fn arena_small_reserves() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, page_size / 2);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size / 2);
             arena.reset();
         }
 
@@ -513,7 +612,10 @@ mod tests {
         #[test]
         fn arena_fractional_page() {
             let page_size = Platform::get_page_size();
-            let mut arena = DynamicArena::with_capacity_reserve(page_size, 3 * page_size / 2);
+            let mut arena = DynamicArena::with_capacity_reserve(
+                page_size,
+                3 * page_size / 2,
+            );
 
             fill_arena::<u8>(&mut arena, 0);
             assert_eq!(arena.committed.get(), arena.reserved);
@@ -527,13 +629,17 @@ mod tests {
         #[test]
         fn alloc_array() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
 
             let init_value = TestStruct {
                 ..Default::default()
             };
             let test = arena
-                .alloc_array(init_value, arena.reserved / size_of::<TestStruct>())
+                .alloc_array(
+                    init_value,
+                    arena.reserved / size_of::<TestStruct>(),
+                )
                 .unwrap();
             for element in test.iter() {
                 assert_eq!(*element, init_value);
@@ -545,11 +651,15 @@ mod tests {
         #[test]
         fn alloc_array_non_default() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
 
             let init_value = TestStruct { x: 1.0, y: 2.0 };
             let test = arena
-                .alloc_array(init_value, arena.reserved / size_of::<TestStruct>())
+                .alloc_array(
+                    init_value,
+                    arena.reserved / size_of::<TestStruct>(),
+                )
                 .unwrap();
             for element in test.iter() {
                 assert_eq!(*element, init_value);
@@ -561,10 +671,13 @@ mod tests {
         #[test]
         fn alloc_zeroed_array() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
 
             let test = arena
-                .alloc_zeroed_array::<I32Struct>(arena.reserved / size_of::<I32Struct>())
+                .alloc_zeroed_array::<I32Struct>(
+                    arena.reserved / size_of::<I32Struct>(),
+                )
                 .unwrap();
             for element in test.iter() {
                 assert_eq!(element.x, 0);
@@ -577,10 +690,13 @@ mod tests {
         #[test]
         fn alloc_uninitialized_array() {
             let page_size = Platform::get_page_size();
-            let arena = DynamicArena::with_capacity_reserve(page_size, page_size);
+            let arena =
+                DynamicArena::with_capacity_reserve(page_size, page_size);
 
             arena
-                .alloc_uninitialized_array::<I32Struct>(arena.reserved / size_of::<I32Struct>())
+                .alloc_uninitialized_array::<I32Struct>(
+                    arena.reserved / size_of::<I32Struct>(),
+                )
                 .unwrap();
 
             assert_eq!(arena.used.get(), arena.committed.get());
@@ -597,7 +713,8 @@ mod tests {
         fn arena_alloc_no_growth(b: &mut Bencher) {
             let element_count = get_element_count();
             let reserve_size = element_count * size_of::<I32Struct>();
-            let mut arena = DynamicArena::with_capacity_reserve(reserve_size, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(reserve_size, reserve_size);
 
             b.iter(|| {
                 let elements = arena
@@ -615,7 +732,8 @@ mod tests {
         fn arena_alloc_grows_and_shrinks(b: &mut Bencher) {
             let element_count = get_element_count();
             let reserve_size = element_count * size_of::<I32Struct>();
-            let mut arena = DynamicArena::with_capacity_reserve(0, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(0, reserve_size);
 
             b.iter(|| {
                 let elements = arena
@@ -633,7 +751,8 @@ mod tests {
         fn arena_alloc_grows_and_shrinks_partial(b: &mut Bencher) {
             let element_count = get_element_count();
             let reserve_size = element_count * size_of::<I32Struct>();
-            let mut arena = DynamicArena::with_capacity_reserve(0, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(0, reserve_size);
 
             let shrink_to = reserve_size / 2;
             b.iter(|| {
@@ -652,7 +771,8 @@ mod tests {
         fn arena_alloc_shrink_no_growth(b: &mut Bencher) {
             let element_count = get_element_count();
             let reserve_size = element_count * size_of::<I32Struct>();
-            let mut arena = DynamicArena::with_capacity_reserve(0, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(0, reserve_size);
 
             let shrink_to = reserve_size;
             b.iter(|| {
@@ -689,7 +809,8 @@ mod tests {
         fn arena_alloc_mixed(b: &mut Bencher) {
             let element_count = get_element_count();
             let reserve_size = element_count * size_of::<MixedStruct>();
-            let mut arena = DynamicArena::with_capacity_reserve(reserve_size, reserve_size);
+            let mut arena =
+                DynamicArena::with_capacity_reserve(reserve_size, reserve_size);
             b.iter(|| {
                 let a = arena.alloc_zeroed::<I32Struct>().unwrap();
                 let b = arena.alloc_zeroed::<LargerStruct>().unwrap();
