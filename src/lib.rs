@@ -198,6 +198,26 @@ impl DynamicArena {
         Ok(result)
     }
 
+    /// Allocates an array of type T with count elements. The initial value of
+    /// the elements in the array is all 0.
+    /// alloc_array performs a cast from usize to isize, and will panic if
+    /// the count value does not fit in isize
+    /// # Arguments
+    /// * `count` - the number of elements to allocate for the array
+    /// # Examples
+    /// ```
+    /// # use tea_dynamic_arena::DynamicArena;
+    /// let arena = DynamicArena::with_capacity_reserve(4096, 8192);
+    /// match arena.alloc_zeroed_array::<i32>(5){
+    ///     Ok(result) => {
+    ///         assert_eq!(result.len(), 5);
+    ///         for element in result {
+    ///             assert_eq!(*element, 0);
+    ///         }
+    ///     },
+    ///     Err(_) => assert!(false)
+    /// };
+    /// ```
     pub fn alloc_zeroed_array<T>(
         &self,
         count: usize,
